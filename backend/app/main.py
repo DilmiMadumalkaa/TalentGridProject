@@ -336,7 +336,7 @@ def fetch_recent_emails(since_time=None):
         except Exception as e:
             print(f"Error processing email: {e}")
             continue
-
+    print(emails)
     return emails
 
 @app.get("/emails", response_model=List[dict])
