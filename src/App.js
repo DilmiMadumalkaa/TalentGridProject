@@ -16,8 +16,8 @@ function App() {
     <Router>
       <Routes>
         {/* Public route */}
-        {/* <Route path="/" element={<LandingPage />} />
-        <Route path="/signup" element={<LandingPage />} /> */}
+        {/* <Route path="/" element={<LoginPage />} /> */}
+        {/* <Route path="/signup" element={<LandingPage />} /> */}
         
         {/* Protected routes */}
         <Route path="/" element={
