@@ -1,0 +1,529 @@
+/* ShortlistedInterns.css */
+.page-container2 {
+  background-color: #f4f7f9;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.nav-container {
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  flex-grow: 1;
+  padding-top: 80px; /* Adjust based on your navbar height */
+  width: 100%;
+}
+
+.shortlisted-header {
+  text-align: center;
+  margin: 30px 0;
+  color: #004d99;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.header-with-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.shortlisted-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.shortlisted-header p {
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.clear-all-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.clear-all-button:hover {
+  background-color: #c82333;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+}
+
+.loader {
+  border: 4px solid rgba(0, 123, 255, 0.3);
+  border-radius: 50%;
+  border-top: 4px solid #007bff;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-container {
+  margin: 40px;
+  padding: 20px;
+  background-color: #ffeeee;
+  border-radius: 8px;
+  border-left: 4px solid #dc3545;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 16px;
+  text-align: center;
+}
+
+.empty-state {
+  margin: 60px 0;
+  text-align: center;
+  color: #666;
+}
+
+.empty-state h2 {
+  font-size: 1.8rem;
+  margin-bottom: 10px;
+  color: #004d99;
+}
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  padding: 40px 20px;
+}
+
+.interns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 30px;
+  justify-content: center;
+}
+
+.intern-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.intern-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
+
+.intern-role {
+  background: linear-gradient(to right, #007bff, #0056b3);
+  color: white;
+  text-align: center;
+  padding: 20px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.intern-role-shortlisted {
+  background: linear-gradient(to right, #28a745, #218838);
+}
+
+.intern-role a {
+  color: white;
+  text-decoration: none;
+}
+
+.intern-details {
+  padding: 25px;
+  flex-grow: 1;
+}
+
+.intern-details h3 {
+  font-size: 1.3rem;
+  color: #004d99;
+  margin-bottom: 15px;
+}
+
+.intern-details p {
+  font-size: 1rem;
+  color: #555;
+  margin-bottom: 10px;
+}
+
+.skills-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.skill-tag {
+  background-color: #e9f5ff;
+  color: #007bff;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  transition: background-color 0.3s ease;
+}
+
+.skill-tag:hover {
+  background-color: #007bff;
+  color: white;
+}
+
+.action-buttons {
+  padding: 15px 25px;
+  text-align: center;
+  background-color: #f5f5f5;
+  border-top: 1px solid #eaeaea;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.view-cv, .hire-button, .delete-button {
+  flex: 1;
+  display: inline-block;
+  padding: 8px 12px;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.view-cv {
+  background-color: #007bff;
+  color: white;
+}
+
+.view-cv:hover {
+  background-color: #0056b3;
+}
+
+.hire-button {
+  background-color: #28a745;
+  color: white;
+}
+
+.hire-button:hover {
+  background-color: #218838;
+}
+
+.delete-button {
+  background-color: #dc3545;
+  color: white;
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .shortlisted-header h1 {
+    font-size: 2rem;
+  }
+  
+  .interns-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .header-with-button {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .view-cv, .hire-button, .delete-button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+/* Date Picker Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+}
+
+.date-picker-modal {
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 25px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.date-picker-modal h2 {
+  color: #004d99;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+}
+
+.date-picker-modal p {
+  margin-bottom: 20px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.date-input-container {
+  margin-bottom: 25px;
+}
+
+.date-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  color: #333;
+  cursor: pointer;
+}
+
+.date-input:focus {
+  border-color: #004d99;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 77, 153, 0.2);
+}
+
+.date-picker-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+.cancel-button, .confirm-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.cancel-button {
+  background-color: #f2f2f2;
+  color: #666;
+}
+
+.cancel-button:hover {
+  background-color: #e6e6e6;
+}
+
+.confirm-button {
+  background-color: #28a745;
+  color: white;
+}
+
+.confirm-button:hover {
+  background-color: #218838;
+}
+
+.confirm-button:disabled {
+  background-color: #7fad8b;
+  cursor: not-allowed;
+}
+
+/* Email Customization Modal */
+.email-modal {
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 25px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: modalFadeIn 0.3s ease;
+}
+
+.email-modal h2 {
+  color: #004d99;
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.modal-section {
+  margin-bottom: 25px;
+}
+
+.modal-section h3 {
+  color: #004d99;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+.modal-section p {
+  margin-bottom: 10px;
+  color: #666;
+}
+
+.subject-input, .date-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.body-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  resize: vertical; /* Allow vertical resizing */
+  min-height: 200px;
+  font-family: "Courier New", monospace; /* Use a monospace font for better formatting */
+  white-space: pre-wrap; /* Preserve line breaks */
+}
+
+.attachment-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.attachment-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.attachment-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.attachment-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.file-input {
+  width: 100%;
+  padding: 8px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.file-input:disabled {
+  background-color: #eee;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.selected-file {
+  background-color: #e9f5ff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: #007bff;
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 30px;
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+}
+
+.confirm-button:disabled {
+  background-color: #7fad8b;
+  cursor: not-allowed;
+}
+
+/* Responsive styles for the email modal */
+@media (max-width: 768px) {
+  .email-modal {
+    width: 95%;
+    padding: 15px;
+  }
+  
+  .email-modal h2 {
+    font-size: 1.5rem;
+  }
+  
+  .modal-section h3 {
+    font-size: 1.1rem;
+  }
+  
+  .attachment-controls {
+    flex-direction: column;
+  }
+  
+  .modal-buttons {
+    flex-direction: column;
+  }
+  
+  .cancel-button, .confirm-button {
+    width: 100%;
+  }
+}
