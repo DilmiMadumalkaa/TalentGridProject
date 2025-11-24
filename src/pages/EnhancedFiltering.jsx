@@ -227,7 +227,7 @@ const RankedCV = () => {
   
   const fetchRankedCVs = async () => {
     if (!inputText.trim() && !selectedCity) {
-      setErrorMessage("Please enter either a job role or select a city.");
+      setErrorMessage("Please enter either  role or select a city.");
       return;
     }
     setErrorMessage("");
