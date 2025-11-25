@@ -745,95 +745,98 @@ class QueryRequest(BaseModel):
 
 @app.post("/rank_cvs")
 def rank_cvs(request: QueryRequest):
-    # Get the filtered interns from the request
+    # Get filtered interns from request
     filtered_interns = request.filteredInterns
-    
-    # Check which of these interns still exist in the main collection
-    # This ensures we don't rank interns who have been shortlisted
+
+    # Extract valid cv_ids
     valid_cv_ids = [intern["cv_id"] for intern in filtered_interns if "cv_id" in intern]
-    
+
     if not valid_cv_ids:
         return {"ranked_cvs": [], "message": "No valid CVs to rank"}
-    
+
+    # Check which interns still exist in DB
     existing_interns = list(collection.find({"cv_id": {"$in": valid_cv_ids}}))
-    
-    # Convert ObjectId to string for each intern
+
+    # Convert ObjectId to string
     for intern in existing_interns:
         intern["_id"] = str(intern["_id"])
-    
-    # Update global data with only existing interns
+
     global data
     data = existing_interns
-    
+
     if not data:
         return {"ranked_cvs": [], "message": "No matching interns found in database"}
 
-    # Get today's date and the cutoff date (7 days from today)
+    # -------------------------------
+    # FIXED STARTING DATE FILTER
+    # -------------------------------
     today = datetime.today().date()
-    one_week_from_today = today + timedelta(days=7)
 
-    # Filter out CVs with starting_date that has already passed
     valid_cvs = []
     for cv in data:
         try:
             if "starting_date" in cv and cv["starting_date"]:
                 starting_date = datetime.strptime(cv["starting_date"], "%Y-%m-%d").date()
-                # Fixed the comparison logic
-                if today <= starting_date >= one_week_from_today:  # Keep all CVs with starting date today or in future
+                
+                # FIX: Keep all future interns
+                if starting_date >= today:
                     valid_cvs.append(cv)
             else:
-                valid_cvs.append(cv)  # Keep CVs without starting date
+                valid_cvs.append(cv)  # keep if no date
         except (ValueError, KeyError, TypeError):
-            valid_cvs.append(cv)  # Keep CVs with invalid date format
+            valid_cvs.append(cv)  # keep if invalid date
 
-    data = valid_cvs  # Update data with valid CVs
-    
+    data = valid_cvs
+
     if not data:
         return {"ranked_cvs": [], "message": "No interns with valid starting dates"}
 
-    # Fetch extracted_text for each CV from the cvText collection
+    # -------------------------------
+    # Fetch extracted text for each CV
+    # -------------------------------
     cvs_with_text = []
     for cv in data:
         if "cv_id" in cv:
             cv_id = cv["cv_id"]
             cv_text_doc = cvText_collection.find_one({"cv_id": cv_id}, {"_id": 0, "extracted_text": 1})
+
             if cv_text_doc and cv_text_doc.get("extracted_text"):
                 cv["extracted_text"] = cv_text_doc["extracted_text"]
                 cvs_with_text.append(cv)
             else:
-                # No text found for this CV
                 print(f"No extracted text found for CV ID: {cv_id}")
-    
-    data = cvs_with_text  # Only keep CVs with extracted text
-    
+
+    data = cvs_with_text
+
     if not data:
         return {"ranked_cvs": [], "message": "No CVs with extracted text found"}
 
+    # -------------------------------
+    # Rank CVs by semantic similarity
+    # -------------------------------
     custom_prompt = request.prompt.strip().lower()
+
     summarized_texts = [cv["extracted_text"] for cv in data if cv.get("extracted_text")]
-    
+
     if not summarized_texts:
         return {"ranked_cvs": [], "message": "No CV texts to analyze"}
 
-    # Encode texts and compute similarity
     cv_embeddings = encoder.encode(summarized_texts, convert_to_tensor=True)
     prompt_embedding = encoder.encode(custom_prompt, convert_to_tensor=True)
     cosine_scores = util.cos_sim(prompt_embedding, cv_embeddings)
 
-    # Rank CVs by similarity (highest score first)
     ranked_indices = cosine_scores[0].argsort(descending=True)
 
-    # Create ranked list
     ranked_cvs = []
-    for rank, i in enumerate(ranked_indices, start=1): 
-        if i < len(data):  # Ensure index is valid
+    for rank, i in enumerate(ranked_indices, start=1):
+        if i < len(data):
             cv = data[i]
             ranked_cvs.append({
                 "cvId": cv["cv_id"],
                 "name": cv.get("name", "Unknown"),
                 "education": cv.get("degree", ""),
                 "institute": cv.get("university", ""),
-                "email": cv.get("email", ""),  # Ensure email is included
+                "email": cv.get("email", ""),
                 "year": cv.get("current_year", ""),
                 "internshipPeriod": cv.get("internship_period", ""),
                 "workingMode": cv.get("working_mode", ""),
@@ -845,7 +848,6 @@ def rank_cvs(request: QueryRequest):
                 "startingDate": cv.get("starting_date", "")
             })
 
-    # ranked_cvs.sort(key=lambda x: x["startingDate"])
     print(f"Ranked {len(ranked_cvs)} CVs successfully")
     return {"ranked_cvs": ranked_cvs}
 
