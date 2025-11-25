@@ -77,7 +77,13 @@
 }
 
 .hire-submit.disabled {
-  background-color: #ccc;
+  background-color: #CCCCCC;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hire-submit.disabled:hover {
+  background-color: #A9A9A9;
   cursor: not-allowed;
   opacity: 0.6;
 }
