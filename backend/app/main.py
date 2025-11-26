@@ -234,7 +234,8 @@ def fetch_recent_emails(since_time=None):
             since_datetime = datetime.strptime(since_time, "%Y-%m-%dT%H:%M:%S.%f")
             query = f"after:{int(since_datetime.timestamp())}"
         except ValueError as e:
-            raise ValueError(f"Invalid date format for since_time: {since_time}. Error: {e}")
+             print(f"[fetch_recent_emails] Invalid date format for since_time={since_time}: {e}")
+             query = ""
 
     results = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
     messages = results.get("messages", [])
@@ -282,37 +283,54 @@ def fetch_recent_emails(since_time=None):
                 print(f"\nProcessing email for: {email_data['name']}")
                 print(f"Email address: {email_data['email']}")
 
-                # Extract PDF and process it
-                pdf_data = extract_pdf_from_email(service, message["id"])
+                # ---- PDF HANDLING (inner try) ----
+                pdf_data = None
+                try:
+                    pdf_data = extract_pdf_from_email(service, message["id"])
+                except Exception as e:
+                    # CHANGE 2: If extract_pdf_from_email fails, log but don't drop the whole email
+                    print(f"Error while locating PDF attachment: {e}")
+                    email_data["pdf_error"] = str(e)
+
                 if pdf_data:
                     print("\nFound PDF attachment!")
                     cv_id = str(uuid.uuid4())
                     email_data["cv_id"] = cv_id
-                    
-                    # Create temporary file for PDF processing
+
                     temp_pdf_path = f"temp_{cv_id}.pdf"
                     try:
                         print(f"Saving PDF to temporary file: {temp_pdf_path}")
-                        with open(temp_pdf_path, 'wb') as pdf_file:
-                            pdf_file.write(pdf_data['data'])
-                        
-                        # Extract text from PDF
+                        with open(temp_pdf_path, "wb") as pdf_file:
+                            pdf_file.write(pdf_data["data"])
+
                         print("Extracting text from PDF...")
-                        extracted_text = extract_text_from_pdf(temp_pdf_path)
-                        print("\nExtracted Text Preview:")
-                        print("-" * 30)
-                        print(extracted_text[:500] + "..." if len(extracted_text) else "No text extracted")
-                        print("-" * 30)
-                        
-                        possible_roles = match_job_roles(extracted_text, job_role_keywords)
-                        print("\nPossible Roles Identified:")
-                        for role in possible_roles:
-                            print(f"- {role}")
-                        
-                        # Store PDF data in email_data
-                        email_data["pdf_extracted_text"] = extracted_text
-                        email_data["pdf_possible_roles"] = possible_roles
-                        email_data["pdf_filename"] = pdf_data['filename']
+                        # CHANGE 3: Wrap PDF text extraction in its own try-except
+                        try:
+                            extracted_text = extract_text_from_pdf(temp_pdf_path)
+                            print("\nExtracted Text Preview:")
+                            print("-" * 30)
+                            print(
+                                extracted_text[:500] + "..."
+                                if len(extracted_text)
+                                else "No text extracted"
+                            )
+                            print("-" * 30)
+
+                            possible_roles = match_job_roles(
+                                extracted_text, job_role_keywords
+                            )
+                            print("\nPossible Roles Identified:")
+                            for role in possible_roles:
+                                print(f"- {role}")
+
+                            email_data["pdf_extracted_text"] = extracted_text
+                            email_data["pdf_possible_roles"] = possible_roles
+                            email_data["pdf_filename"] = pdf_data["filename"]
+
+                        except Exception as e:
+                            # IMPORTANT: Do not let PDF extraction kill the email
+                            print(f"Error processing PDF content: {e}")
+                            email_data["pdf_error"] = str(e)
                         
                     finally:
                         if os.path.exists(temp_pdf_path):
@@ -322,14 +340,28 @@ def fetch_recent_emails(since_time=None):
                     print("\nNo PDF attachment found")
 
                 # Clean up email data
-                email_data = {key: (value if value != "" else "") for key, value in email_data.items()}
-                email_data["skills"] = email_data["skills"] if isinstance(email_data["skills"], dict) else {}
+                # ---- DATA CLEANUP ----
+                # CHANGE 4: Don't force skills to be dict. Keep list if list.
+                if not isinstance(email_data.get("skills"), (list, dict)):
+                    email_data["skills"] = []
+
                 if email_data["cv_link"].startswith('"') and email_data["cv_link"].endswith('"'):
                     email_data["cv_link"] = email_data["cv_link"][1:-1]
-                email_data["working_mode"] = [str(item).replace("'", '"') for item in email_data["working_mode"]]
-                email_data["expected_role"] = [str(item).replace("'", '"') for item in email_data["expected_role"]]
-                email_data = {key: (value.strip() if isinstance(value, str) else value) for key, value in email_data.items()}
-                
+
+                # Normalise working_mode / expected_role to array of strings
+                email_data["working_mode"] = [
+                    str(item).replace("'", '"') for item in (email_data["working_mode"] or [])
+                ]
+                email_data["expected_role"] = [
+                    str(item).replace("'", '"') for item in (email_data["expected_role"] or [])
+                ]
+
+                # Strip whitespace from strings
+                email_data = {
+                    key: (value.strip() if isinstance(value, str) else value)
+                    for key, value in email_data.items()
+                }
+
                 emails.append(email_data)
                 print("\nEmail processing completed")
 
