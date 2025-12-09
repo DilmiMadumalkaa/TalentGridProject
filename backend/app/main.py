@@ -821,7 +821,7 @@ def rank_cvs(request: QueryRequest):
     data = valid_cvs  # Update data with valid CVs
     
     if not data:
-        return {"ranked_cvs": [], "message": "No interns with valid starting dates"}
+        return {"ranked_cvs": [], "message": "No Interns Found."}
 
     # Fetch extracted_text for each CV from the cvText collection
     cvs_with_text = []
