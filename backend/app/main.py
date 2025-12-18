@@ -1038,44 +1038,20 @@ def _coerce_starting_date(doc) -> datetime | None:
 
 @app.delete("/interns/clear-old")
 def clear_old_interns():
-    # You should inject this collection from your app (shown below)
-    global collection  # type: ignore
-
-    if collection is None:
-        raise HTTPException(status_code=500, detail="DB not initialized")
-
     now_utc = datetime.now(timezone.utc)
     cutoff = now_utc - relativedelta(months=3)
+    cutoff_str = cutoff.date().isoformat()  # "YYYY-MM-DD"
 
-    # If startingDate is stored as a BSON Date (datetime) in MongoDB:
-    # This is fast and uses Mongo filtering.
-    mongo_result = collection.delete_many({"startingDate": {"$lte": cutoff}})
-    deleted_by_date_type = mongo_result.deleted_count
-
-    # If you ALSO have older records where startingDate is stored as string,
-    # Mongo can't reliably compare strings to datetimes, so we handle those.
-    # We find docs with string startingDate and delete by computed list.
-    string_docs = collection.find(
-        {"startingDate": {"$type": "string"}},
-        {"_id": 1, "startingDate": 1}
-    )
-
-    ids_to_delete = []
-    for d in string_docs:
-        dt = _coerce_starting_date(d)
-        if dt and dt <= cutoff:
-            ids_to_delete.append(d["_id"])
-
-    deleted_string = 0
-    if ids_to_delete:
-        r2 = collection.delete_many({"_id": {"$in": ids_to_delete}})
-        deleted_string = r2.deleted_count
+    result = collection.delete_many({
+        "starting_date": {"$lte": cutoff_str}
+    })
 
     return {
-        "deleted_count": deleted_by_date_type + deleted_string,
-        "cutoff_date": cutoff.date().isoformat(),
+        "deleted_count": result.deleted_count,
+        "cutoff_date": cutoff_str,
         "now_utc": now_utc.isoformat(),
     }
+
 
 # @app.post("/hire-intern/{cv_id}")
 # async def hire_intern(cv_id: str):

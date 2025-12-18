@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/navbar/Navbar";
+import ClearOldInternsButton from "../components/ClearOldInterns/ClearOldInternsButton";
 
 const HireNewInterns = () => {
   const [formData, setFormData] = useState({
@@ -18,9 +19,10 @@ const HireNewInterns = () => {
 
   const [interns, setInterns] = useState([]);
   const [filteredInterns, setFilteredInterns] = useState([]);
+ 
   const navigate = useNavigate();
 
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
   const API_TIMEOUT = process.env.REACT_APP_API_TIMEOUT || 30000;
 
   const api = axios.create({
@@ -148,7 +150,10 @@ const HireNewInterns = () => {
   return (
     <div className="hire-container">
       <Navbar />
-      <h1 className="hire-title">Filter Interns</h1>
+      <div className="btn-adjustment">
+        <h1 className="hire-title">Filter Interns</h1>
+        <ClearOldInternsButton onCleared={fetchInterns}/>
+      </div>
       <form className="hire-form" onSubmit={handleSubmit}>
         {/* Educational Institute */}
         <label className="hire-label">
