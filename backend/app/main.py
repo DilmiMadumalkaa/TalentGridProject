@@ -6,7 +6,8 @@ from google.auth.transport.requests import Request # type: ignore
 from fastapi import FastAPI, Depends, HTTPException, status # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from typing import Collection, List, Dict, Union
+from typing import Any, Collection, List, Dict, Union
+import httpx
 from pydantic import BaseModel # type: ignore
 from pymongo import MongoClient  # type: ignore # Import MongoClient for MongoDB connection
 from bs4 import BeautifulSoup # type: ignore
@@ -22,6 +23,9 @@ import re
 import os
 import email  # Import this to use email.message_from_bytes
 from pymongo.server_api import ServerApi # type: ignore
+import fitz  # type: ignore # PyMuPDF for PDF handling
+from docx import Document # type: ignore
+from io import BytesIO
 from app.process_cv import extract_text_from_pdf, match_job_roles, job_role_keywords
 import json
 import re
@@ -37,6 +41,9 @@ from email import encoders
 from fastapi import File, Form, UploadFile
 import shutil
 from email.mime.text import MIMEText
+import json  # For parsing lists in working_mode and expected_role
+from datetime import datetime,timezone
+from fastapi.responses import Response
 
 from dotenv import load_dotenv 
 
@@ -55,7 +62,7 @@ MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "sltinterndata")
 client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 
 # Get CORS origins from environment variable
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5001").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS").split(",")
 
 # Add CORS middleware
 app.add_middleware(
@@ -113,11 +120,14 @@ class EmailData(BaseModel):
 
 
 # Gmail API credentials from environment variables
-ACCESS_TOKEN = os.getenv("GMAIL_ACCESS_TOKEN")
-REFRESH_TOKEN = os.getenv("GMAIL_REFRESH_TOKEN")
-CLIENT_ID = os.getenv("GMAIL_CLIENT_ID")
-CLIENT_SECRET = os.getenv("GMAIL_CLIENT_SECRET")
-TOKEN_URI = os.getenv("GMAIL_TOKEN_URI", "https://oauth2.googleapis.com/token")
+# ACCESS_TOKEN = os.getenv("GMAIL_ACCESS_TOKEN")
+# REFRESH_TOKEN = os.getenv("GMAIL_REFRESH_TOKEN")
+# CLIENT_ID = os.getenv("GMAIL_CLIENT_ID")
+# CLIENT_SECRET = os.getenv("GMAIL_CLIENT_SECRET")
+# TOKEN_URI = os.getenv("GMAIL_TOKEN_URI", "https://oauth2.googleapis.com/token")
+
+#N8N configurations
+N8N_URL = os.getenv("N8N_WORKFLOW_WEBHOOK_URL")
 
 # Email configuration from environment variables
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
@@ -152,25 +162,75 @@ def initialize_default_attachment():
 initialize_default_attachment()
 
 # Function to authenticate Gmail API using the provided tokens
-def authenticate_gmail():
-    creds = Credentials(
-        token=ACCESS_TOKEN,
-        refresh_token=REFRESH_TOKEN,
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        token_uri=TOKEN_URI
-    )
+# def authenticate_gmail():
+#     creds = Credentials(
+#         token=ACCESS_TOKEN,
+#         refresh_token=REFRESH_TOKEN,
+#         client_id=CLIENT_ID,
+#         client_secret=CLIENT_SECRET,
+#         token_uri=TOKEN_URI
+#     )
 
-    if not creds.valid:
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+#     if not creds.valid:
+#         if creds.expired and creds.refresh_token:
+#             creds.refresh(Request())
 
-    return creds
+#     return creds
+
+def _pick_cv_attachment(attachments: list) -> dict:
+    """Pick a CV attachment from the list of attachments."""
+    if not attachments:
+        return None
+    
+    for att in attachments:
+        filename = (att.get("filename") or "").lower()
+        mime = (att.get("mimeType") or "").lower()
+        
+        # Check if it's a PDF or common CV format
+        if filename.endswith((".pdf", ".doc", ".docx")) or mime in ("application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"):
+            return att
+    
+    # If no PDF found, return the first attachment
+    return attachments[0] if attachments else None
+
+def _safe_email_from_from_field(from_field: str) -> str:
+    """Extract email address from the From field."""
+    if not from_field:
+        return ""
+    
+    # Try to extract email from format: "Name <email@domain.com>"
+    match = re.search(r"<(.+?)>", from_field)
+    if match:
+        return match.group(1).strip()
+    
+    # If no angle brackets, assume the whole thing is an email
+    return from_field.strip()
+
+def _parse_isoish_date(date_str: str) -> datetime:
+    """Parse ISO-like date strings."""
+    if not date_str:
+        return None
+    
+    try:
+        # Try ISO format first
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        pass
+    
+    try:
+        # Try common formats
+        for fmt in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%a, %b %d, %Y %H:%M:%S %z"]:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
+    except Exception:
+        pass
+    
+    return None
 
 def decode_email_raw(raw):
     """Decode the raw email content."""
-
-
     message_bytes = base64.urlsafe_b64decode(raw)
     message = email.message_from_bytes(message_bytes)
 
@@ -198,197 +258,190 @@ def decode_email_raw(raw):
 
     return ""  # Return empty if no suitable content is found
 
-import json  # For parsing lists in working_mode and expected_role
 
+def extract_skills(text: str):
 
-from datetime import datetime
-def extract_skills(text):
-    """Extracts skills from the email text in the correct format."""
-    skills_section = re.search(r"Skills:\s*((?:\w+-\[[^\]]+\]\s*)+)", text, re.MULTILINE)
-    if not skills_section:
-        return "{}"  # Return empty JSON string if no skills found
+    if not text:
+        return {}
 
-    skills_text = skills_section.group(1).strip()
+    # Capture Skills block until the next known section label or end of text
+    block_match = re.search(
+        r"Skills:\s*(.*?)(?:\n(?:Statement|CV|Contact No|Starting Date|Expected Role|Working Mode|Internship Period|Current Year|Institute|Course|Email|Name):|\Z)",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not block_match:
+        return {}
+
+    skills_block = block_match.group(1).strip()
+    if not skills_block:
+        return {}
+
     skills_dict = {}
 
-    # Extract each skill category and its list of skills
-    matches = re.findall(r"(\w+)-(\[.*?\])", skills_text)
-    for category, skill_list in matches:
+    pair_matches = re.findall(
+        r"([A-Za-z][A-Za-z0-9 &/\-]+?)\s*-\s*(\[[^\]]*\])",
+        skills_block,
+        flags=re.DOTALL,
+    )
+
+    for category, skill_list in pair_matches:
+        category = category.strip()
+        raw = skill_list.strip()
+
+        # Normalize quotes so json.loads can parse
+        normalized = raw.replace("'", '"')
+
         try:
-            skills_dict[category] = json.loads(skill_list.replace("'", '"'))
+            parsed = json.loads(normalized)
+            # Ensure list
+            if isinstance(parsed, list):
+                skills_dict[category] = parsed
+            else:
+                skills_dict[category] = [str(parsed)]
         except json.JSONDecodeError:
-            skills_dict[category] = []
+            # Fallback: try to split manually if it's not valid JSON
+            inner = raw.strip()[1:-1].strip()
+            if inner:
+                skills_dict[category] = [s.strip().strip('"').strip("'") for s in inner.split(",") if s.strip()]
+            else:
+                skills_dict[category] = []
 
-    return json.dumps(skills_dict)  # Convert dict back to JSON string for parsing
-    
+    # If it didn't match "Category-[...]" format, fallback: treat as comma-separated list
+    if not skills_dict:
+        items = [s.strip() for s in re.split(r"[,\n•]+", skills_block) if s.strip()]
+        if items:
+            skills_dict["Skills"] = items
+
+    return skills_dict
+  # Convert dict back to JSON string for parsing
+
+CV_STORE = {}  # cv_id -> { "bytes": ..., "mime": ..., "filename": ... }
 
 
-def fetch_recent_emails(since_time=None):
-    """Fetch emails received after a specific time."""
-    creds = authenticate_gmail()
-    service = build("gmail", "v1", credentials=creds)
+@app.get("/cv/{cv_id}")
+def get_cv(cv_id: str):
+    cv = CV_STORE.get(cv_id)
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return Response(
+        content=cv["bytes"],
+        media_type=cv["mime"],
+        headers={"Content-Disposition": f'inline; filename="{cv["filename"]}"'}
+    )  
 
-    query = ""
+
+async def fetch_recent_emails(since_time: Optional[str] = None) -> List[Dict[str, Any]]:
+    N8N_URL = os.getenv("N8N_WORKFLOW_WEBHOOK_URL")
+    if not N8N_URL:
+        raise RuntimeError("Missing env var: N8N_WORKFLOW_WEBHOOK_URL")
+
+    params = {}
     if since_time:
-        try:
-            since_datetime = datetime.strptime(since_time, "%Y-%m-%dT%H:%M:%S.%f")
-            query = f"after:{int(since_datetime.timestamp())}"
-        except ValueError as e:
-             print(f"[fetch_recent_emails] Invalid date format for since_time={since_time}: {e}")
-             query = ""
+        params["since_time"] = since_time
 
-    results = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
-    messages = results.get("messages", [])
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        resp = await client.get(N8N_URL, params=params)
+        resp.raise_for_status()
+        items = resp.json()
 
     emails = []
-    for message in messages:
+
+    for item in items:
         try:
-            print("\n" + "="*50)
-            print("Processing new email...")
-            
-            # Get the email content
-            msg = service.users().messages().get(userId="me", id=message["id"], format="raw").execute()
-            raw = msg.get("raw", "")
-            
-            if raw:
-                body_data = decode_email_raw(raw)
-                
-                # Extract email metadata using existing regex patterns
-                def safe_regex(pattern, text, group=1):
-                    match = re.search(pattern, text, re.MULTILINE)
-                    return match.group(group).strip() if match else ""
+            body_data = item.get("body_text", "") or ""
 
-                def safe_json_parse(text):
-                    try:
-                        return json.loads(text.replace("'", '"'))
-                    except (json.JSONDecodeError, TypeError):
-                        return []
+            def safe_regex(pattern, text, group=1):
+                match = re.search(pattern, text, re.MULTILINE)
+                return match.group(group).strip() if match else ""
 
-                email_data = {
-                    "name": safe_regex(r"Name:\s*(.*)", body_data),
-                    "email": safe_regex(r"Email:\s*(.*)", body_data),
-                    "degree": safe_regex(r"Course:\s*(.*)", body_data),
-                    "university": safe_regex(r"Institute:\s*(.*)", body_data),
-                    "current_year": safe_regex(r"Current Year:\s*(.*)", body_data),
-                    "internship_period": safe_regex(r"Internship Period:\s*(.*)", body_data),
-                    "working_mode": safe_json_parse(safe_regex(r"Working Mode:\s*(\[.*\])", body_data)),
-                    "expected_role": safe_json_parse(safe_regex(r"Expected Role:\s*(\[.*\])", body_data)),
-                    "starting_date": safe_regex(r"Starting Date:\s*(.*)", body_data),
-                    "contact_no": safe_regex(r"Contact No:\s*(.*)", body_data),
-                    "skills": safe_json_parse(extract_skills(body_data)),
-                    "statement": safe_regex(r"Statement:\s*(.*)", body_data),
-                    "cv_link": safe_regex(r"CV: \"Please Check Attachments\"\s*(.*)", body_data).rstrip(";"),
-                }
+            def safe_json_parse(text):
 
-                print(f"\nProcessing email for: {email_data['name']}")
-                print(f"Email address: {email_data['email']}")
+                # Already parsed
+                if isinstance(text, (list, dict)):
+                    return text
 
-                # ---- PDF HANDLING (inner try) ----
-                pdf_data = None
+                # None or empty
+                if not text or not isinstance(text, str):
+                    return []
+
+                text = text.strip()
+                if not text:
+                    return []
+
+                # Try JSON first
                 try:
-                    pdf_data = extract_pdf_from_email(service, message["id"])
-                except Exception as e:
-                    # CHANGE 2: If extract_pdf_from_email fails, log but don't drop the whole email
-                    print(f"Error while locating PDF attachment: {e}")
-                    email_data["pdf_error"] = str(e)
+                    return json.loads(text.replace("'", '"'))
+                except json.JSONDecodeError:
+                     pass
 
-                if pdf_data:
-                    print("\nFound PDF attachment!")
-                    cv_id = str(uuid.uuid4())
-                    email_data["cv_id"] = cv_id
+                # Fallback: treat as single value list
+                return [text]
 
-                    temp_pdf_path = f"temp_{cv_id}.pdf"
-                    try:
-                        print(f"Saving PDF to temporary file: {temp_pdf_path}")
-                        with open(temp_pdf_path, "wb") as pdf_file:
-                            pdf_file.write(pdf_data["data"])
 
-                        print("Extracting text from PDF...")
-                        # CHANGE 3: Wrap PDF text extraction in its own try-except
-                        try:
-                            extracted_text = extract_text_from_pdf(temp_pdf_path)
-                            print("\nExtracted Text Preview:")
-                            print("-" * 30)
-                            print(
-                                extracted_text[:500] + "..."
-                                if len(extracted_text)
-                                else "No text extracted"
-                            )
-                            print("-" * 30)
+            email_data = {
+                "name": safe_regex(r"Name:\s*(.*)", body_data),
+                "email": safe_regex(r"Email:\s*(.*)", body_data),
+                "degree": safe_regex(r"Course:\s*(.*)", body_data),
+                "university": safe_regex(r"Institute:\s*(.*)", body_data),
+                "current_year": safe_regex(r"Current Year:\s*(.*)", body_data),
+                "internship_period": safe_regex(r"Internship Period:\s*(.*)", body_data),
+                "working_mode": safe_json_parse(safe_regex(r"Working Mode:\s*(\[.*\])", body_data)),
+                "expected_role": safe_json_parse(safe_regex(r"Expected Role:\s*(\[.*\])", body_data)),
+                "starting_date": safe_regex(r"Starting Date:\s*(.*)", body_data),
+                "contact_no": safe_regex(r"Contact No:\s*(.*)", body_data),
+                "skills": extract_skills(body_data),
+                "statement": safe_regex(r"Statement:\s*(.*)", body_data),
+                "cv_link": "",
+            }
 
-                            possible_roles = match_job_roles(
-                                extracted_text, job_role_keywords
-                            )
-                            print("\nPossible Roles Identified:")
-                            for role in possible_roles:
-                                print(f"- {role}")
+            # --- attachment handling from n8n ---
+            attachments = item.get("attachments") or []
+            # pick first pdf
+            pdf_att = None
+            for a in attachments:
+                fn = (a.get("filename") or "").lower()
+                mt = (a.get("mimeType") or "").lower()
+                if fn.endswith(".pdf") or mt == "application/pdf":
+                    pdf_att = a
+                    break
 
-                            email_data["pdf_extracted_text"] = extracted_text
-                            email_data["pdf_possible_roles"] = possible_roles
-                            email_data["pdf_filename"] = pdf_data["filename"]
-
-                        except Exception as e:
-                            # IMPORTANT: Do not let PDF extraction kill the email
-                            print(f"Error processing PDF content: {e}")
-                            email_data["pdf_error"] = str(e)
-                        
-                    finally:
-                        if os.path.exists(temp_pdf_path):
-                            os.remove(temp_pdf_path)
-                            print(f"\nCleaned up temporary file: {temp_pdf_path}")
-                else:
-                    print("\nNo PDF attachment found")
-
-                # Clean up email data
-                # ---- DATA CLEANUP ----
-                # CHANGE 4: Don't force skills to be dict. Keep list if list.
-                if not isinstance(email_data.get("skills"), (list, dict)):
-                    email_data["skills"] = []
-
-                if email_data["cv_link"].startswith('"') and email_data["cv_link"].endswith('"'):
-                    email_data["cv_link"] = email_data["cv_link"][1:-1]
-
-                # Normalise working_mode / expected_role to array of strings
-                email_data["working_mode"] = [
-                    str(item).replace("'", '"') for item in (email_data["working_mode"] or [])
-                ]
-                email_data["expected_role"] = [
-                    str(item).replace("'", '"') for item in (email_data["expected_role"] or [])
-                ]
-
-                # Strip whitespace from strings
-                email_data = {
-                    key: (value.strip() if isinstance(value, str) else value)
-                    for key, value in email_data.items()
+            if pdf_att and pdf_att.get("contentBase64"):
+                cv_id = str(uuid.uuid4())
+                pdf_bytes = base64.b64decode(pdf_att["contentBase64"])
+                CV_STORE[cv_id] = {
+                    "bytes": pdf_bytes,
+                    "mime": pdf_att.get("mimeType") or "application/pdf",
+                    "filename": pdf_att.get("filename") or f"{cv_id}.pdf",
                 }
+                email_data["cv_id"] = cv_id
+                email_data["cv_link"] = f"http://127.0.0.1:5001/cv/{cv_id}"  # change host/port if needed
+            else:
+                email_data["cv_link"] = ""
 
-                emails.append(email_data)
-                print("\nEmail processing completed")
+            # ---- cleanup (your same logic) ----
+            if not isinstance(email_data.get("skills"), (list, dict)):
+                email_data["skills"] = []
+
+            email_data["working_mode"] = [str(x) for x in (email_data["working_mode"] or [])]
+            email_data["expected_role"] = [str(x) for x in (email_data["expected_role"] or [])]
+
+            email_data = {k: (v.strip() if isinstance(v, str) else v) for k, v in email_data.items()}
+
+            emails.append(email_data)
 
         except Exception as e:
-            print(f"Error processing email: {e}")
+            print(f"Error processing n8n item: {e}")
             continue
 
     return emails
 
 
+@app.get("/emails")
+async def get_emails():
+    return await fetch_recent_emails()
 
-@app.get("/emails", response_model=List[dict])
-def get_emails():
-    return fetch_recent_emails()
-
-
-# Endpoint to get the latest uploaded time
-@app.get("/latest_uploaded_time")
-def get_latest_uploaded_time():
-    # Fetch the latest record sorted by uploaded_time
-    latest_record = collection.find_one(sort=[("uploaded_time", -1)])
-    
-    if latest_record:
-        return {"latest_uploaded_time": latest_record.get("uploaded_time")}
-    else:
-        return {"message": "No records found"}
-    
+#--------------------------------------------------------------------------------------------------
     
 @app.get("/emails_since_last_upload")
 def get_emails_since_last_upload():
@@ -399,7 +452,7 @@ def get_emails_since_last_upload():
         print(f"Last uploaded time: {last_uploaded_time}")
 
         # Fetch emails received after the last uploaded time
-        emails = fetch_recent_emails(since_time=last_uploaded_time)
+        emails = fetch_recent_emails()
         return {"emails": emails}
 
     except Exception as e:
@@ -945,6 +998,84 @@ async def remove_shortlisted_intern(cv_id: str):
         raise HTTPException(status_code=404, detail="Shortlisted intern not found")
 
     return {"message": "Intern removed from shortlist successfully"}
+
+#----------------------------------- CLEAR OLD INTERNS----------------------------------------------
+def _parse_iso_date(s: str) -> datetime:
+    """
+    Parse common ISO-like dates. Treat date-only as midnight UTC.
+    """
+    s = (s or "").strip()
+    if not s:
+        raise ValueError("empty date")
+
+    # date-only
+    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+        dt = datetime.fromisoformat(s)  # naive
+        return dt.replace(tzinfo=timezone.utc)
+
+    # datetime ISO
+    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+def _coerce_starting_date(doc) -> datetime | None:
+    v = doc.get("startingDate")
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        # normalize to UTC aware
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)
+    if isinstance(v, str):
+        try:
+            return _parse_iso_date(v)
+        except Exception:
+            return None
+    return None
+
+
+@app.delete("/interns/clear-old")
+def clear_old_interns():
+    # You should inject this collection from your app (shown below)
+    global collection  # type: ignore
+
+    if collection is None:
+        raise HTTPException(status_code=500, detail="DB not initialized")
+
+    now_utc = datetime.now(timezone.utc)
+    cutoff = now_utc - relativedelta(months=3)
+
+    # If startingDate is stored as a BSON Date (datetime) in MongoDB:
+    # This is fast and uses Mongo filtering.
+    mongo_result = collection.delete_many({"startingDate": {"$lte": cutoff}})
+    deleted_by_date_type = mongo_result.deleted_count
+
+    # If you ALSO have older records where startingDate is stored as string,
+    # Mongo can't reliably compare strings to datetimes, so we handle those.
+    # We find docs with string startingDate and delete by computed list.
+    string_docs = collection.find(
+        {"startingDate": {"$type": "string"}},
+        {"_id": 1, "startingDate": 1}
+    )
+
+    ids_to_delete = []
+    for d in string_docs:
+        dt = _coerce_starting_date(d)
+        if dt and dt <= cutoff:
+            ids_to_delete.append(d["_id"])
+
+    deleted_string = 0
+    if ids_to_delete:
+        r2 = collection.delete_many({"_id": {"$in": ids_to_delete}})
+        deleted_string = r2.deleted_count
+
+    return {
+        "deleted_count": deleted_by_date_type + deleted_string,
+        "cutoff_date": cutoff.date().isoformat(),
+        "now_utc": now_utc.isoformat(),
+    }
 
 # @app.post("/hire-intern/{cv_id}")
 # async def hire_intern(cv_id: str):
