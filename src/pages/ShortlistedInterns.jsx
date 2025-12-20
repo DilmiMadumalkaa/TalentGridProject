@@ -89,7 +89,9 @@ SLTMobitel`;
 
 
   // Get API base URL from environment variables
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:3000";
+
 const API_TIMEOUT = process.env.REACT_APP_API_TIMEOUT || 30000;
 
 // Configure axios instance with base URL and timeout
@@ -268,6 +270,16 @@ const handleDeleteIntern = async (cv_id) => {
   }
 };
 
+
+  // 🔽 Sort interns by starting_date (latest first)
+    const sortedInterns = [...interns].sort((a, b) => {
+      const dateA = new Date(a.starting_date);
+      const dateB = new Date(b.starting_date);
+      return dateB - dateA; // Descending order
+    });
+
+
+
   return (
     <div className="page-container2">
       <div className="nav-container">
@@ -305,7 +317,9 @@ const handleDeleteIntern = async (cv_id) => {
         ) : (
           <div className="container">
             <div className="interns-grid">
-              {interns.map((intern, index) => {
+
+              {sortedInterns.map((intern, index) => {
+
                 const allSkills = Object.values(intern.skills || {}).flat();
                 return (
                   <div key={index} className="intern-card">

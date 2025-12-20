@@ -19,10 +19,11 @@ const HireNewInterns = () => {
 
   const [interns, setInterns] = useState([]);
   const [filteredInterns, setFilteredInterns] = useState([]);
- 
+
   const navigate = useNavigate();
 
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
+
   const API_TIMEOUT = process.env.REACT_APP_API_TIMEOUT || 30000;
 
   const api = axios.create({
@@ -131,6 +132,13 @@ const HireNewInterns = () => {
 
   const handleEnhancedFiltering = () => {
     navigate("/enhanced-filtering", { state: { filteredInterns } });
+
+    const sortedByStartingDate = [...interns].sort((a, b) => {
+    return new Date(b.starting_date) - new Date(a.starting_date);
+  });
+
+  setFilteredInterns(sortedByStartingDate);
+
   };
 
   // Check if at least one filter is applied
@@ -147,6 +155,12 @@ const HireNewInterns = () => {
     );
   };
 
+  // Sort filtered interns by latest starting date (descending)
+  const sortedFilteredInterns = [...filteredInterns].sort(
+    (a, b) => new Date(b.starting_date) - new Date(a.starting_date)
+  );
+
+
   return (
     <div className="hire-container">
       <Navbar />
@@ -154,6 +168,8 @@ const HireNewInterns = () => {
         <h1 className="hire-title">Filter Interns</h1>
         <ClearOldInternsButton onCleared={fetchInterns}/>
       </div>
+
+
       <form className="hire-form" onSubmit={handleSubmit}>
         {/* Educational Institute */}
         <label className="hire-label">
@@ -380,7 +396,9 @@ const HireNewInterns = () => {
         <h2>Filtered Interns</h2>
         {filteredInterns.length > 0 ? (
           <div className="interns-grid">
-            {filteredInterns.map((intern, index) => (
+
+            {sortedFilteredInterns.map((intern, index) => (
+
               <div key={index} className="intern-card">
                 <a
                   href={intern.cv_link}
