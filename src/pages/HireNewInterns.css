@@ -3,17 +3,26 @@
 .hire-container {
   max-width: 10000px;
   margin: 0 auto;
-  padding: 60px 20px;
   background-color: #f9f9f9;
   font-family: 'Arial', sans-serif;
 }
 
 .hire-title {
+  grid-column: 2;
+  margin: 0;
   text-align: center;
   font-size: 2.8rem;
-  margin-bottom: 40px;
   color: #004d99;
   font-weight: 700;
+  padding-right: 160px;
+}
+
+.btn-adjustment{
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  padding: 16px 24px;
 }
 
 .hire-form {
@@ -77,7 +86,13 @@
 }
 
 .hire-submit.disabled {
-  background-color: #ccc;
+  background-color: #CCCCCC;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hire-submit.disabled:hover {
+  background-color: #A9A9A9;
   cursor: not-allowed;
   opacity: 0.6;
 }

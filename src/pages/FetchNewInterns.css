@@ -120,6 +120,20 @@ body {
   background-color: var(--primary-hover);
 }
 
+.btn-info {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.btn-info:hover {
+  background-color: #138496;
+}
+
+.btn-info:disabled {
+  background-color: var(--text-light);
+  cursor: not-allowed;
+}
+
 .latest-time {
   display: flex;
   align-items: center;

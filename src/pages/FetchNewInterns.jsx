@@ -34,10 +34,92 @@ const FetchNewInterns = () => {
       setEmails([]);
     }
   } catch (error) {
-    console.error("Error fetching emails:", error);
+    console.error("Error fetching emails from n8n:", error);
+    // Fallback: try to fetch saved emails from MongoDB
+    try {
+      console.log("Falling back to fetch from MongoDB...");
+      const response = await api.get("/emails?source=mongodb");
+      if (Array.isArray(response.data)) {
+        setEmails(response.data);
+      } else {
+        setEmails([]);
+      }
+    } catch (fallbackError) {
+      console.error("Error fetching from MongoDB fallback:", fallbackError);
+      setEmails([]);
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const fetchSavedEmails = async () => {
+  setIsLoading(true);
+  try {
+    // Fetch previously saved emails from MongoDB
+    const response = await api.get("/emails?source=mongodb");
+    if (Array.isArray(response.data)) {
+      setEmails(response.data);
+    } else {
+      console.error("Unexpected API response format:", response.data);
+      setEmails([]);
+    }
+  } catch (error) {
+    console.error("Error fetching saved emails:", error);
     setEmails([]);
   } finally {
     setIsLoading(false);
+  }
+};
+
+  const fetchUnreadEmails = async () => {
+  setIsLoading(true);
+  try {
+    // Fetch only unread emails from MongoDB
+    const response = await api.get("/emails?source=mongodb&unread_only=true");
+    if (Array.isArray(response.data)) {
+      setEmails(response.data);
+      if (response.data.length > 0) {
+        showNotification("Success", `Loaded ${response.data.length} unread email(s)`, "success");
+      } else {
+        showNotification("Info", "No unread emails found", "info");
+      }
+    } else {
+      console.error("Unexpected API response format:", response.data);
+      setEmails([]);
+    }
+  } catch (error) {
+    console.error("Error fetching unread emails:", error);
+    setEmails([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const deleteAllEmails = async () => {
+  if (window.confirm("Are you sure you want to delete ALL emails? This action cannot be undone.")) {
+    try {
+      const response = await api.delete("/emails/all");
+      setEmails([]);
+      showNotification("Success", response.data.message, "success");
+    } catch (error) {
+      console.error("Error deleting emails:", error);
+      showNotification("Error", "Failed to delete emails", "error");
+    }
+  }
+};
+
+  const markAllAsRead = async () => {
+  try {
+    const response = await api.post("/emails/read-all");
+    showNotification("Success", response.data.message, "success");
+    // Refresh the emails list
+    if (emails.length > 0) {
+      fetchSavedEmails();
+    }
+  } catch (error) {
+    console.error("Error marking emails as read:", error);
+    showNotification("Error", "Failed to mark emails as read", "error");
   }
 };
 
@@ -195,7 +277,7 @@ const FetchNewInterns = () => {
             ) : (
               <>
                 <i className="icon-refresh"></i>
-                <span>Fetch Emails</span>
+                <span>Fetch New Emails</span>
               </>
             )}
           </button>
