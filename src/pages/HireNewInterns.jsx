@@ -108,7 +108,7 @@ const HireNewInterns = () => {
 
   const handleHire = async (intern) => {
     try {
-      await api.post(`/shortlist/${intern.cvid}`);
+      await api.post(`/shortlist/${intern.cv_id}`);
       alert(`${intern.name} has been shortlisted.`);
       const updatedInterns = interns.filter((i) => i.cv_id !== intern.cv_id);
       setInterns(updatedInterns);

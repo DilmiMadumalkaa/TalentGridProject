@@ -1500,6 +1500,7 @@ async def hire_intern(
                 server.starttls()  # Secure the connection
                 server.ehlo()  # Some servers need this twice
                 server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+                print("Successful login")
                 server.send_message(message)
                 print(f"Email sent successfully to {intern_email} with deadline date: {formatted_date}")
                 
